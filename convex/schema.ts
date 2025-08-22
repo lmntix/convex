@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
 // Enum definitions converted from Drizzle pgEnum to Convex v.union
 export const accountPrimaryGroupEnum = v.union(
@@ -236,7 +237,13 @@ export const loanPlanTypeEnum = v.union(
  * current calendar day setting.
  */
 
+// The schema is normally optional, but Convex Auth
+// requires indexes defined on `authTables`.
+// The schema provides more precise TypeScript types.
 export default defineSchema({
+  // Include Convex Auth tables
+  ...authTables,
+
   // Organizations - Root table for multi-tenancy
   organizations: defineTable({
     name: v.string(),
@@ -250,19 +257,6 @@ export default defineSchema({
     regNo: v.optional(v.string()),
     name: v.optional(v.string()),
   }),
-
-  // Auth Schema - User management tables
-  users: defineTable({
-    name: v.string(),
-    email: v.string(),
-    emailVerified: v.boolean(),
-    image: v.optional(v.string()),
-    role: v.optional(v.string()),
-    banned: v.optional(v.boolean()),
-    banReason: v.optional(v.string()),
-    banExpires: v.optional(v.number()),
-    isActive: v.optional(v.boolean()),
-  }).index("by_email", ["email"]),
 
   // FK: organizationId -> organizations._id, inviterId -> users._id, teamId -> teams._id
   invitations: defineTable({
@@ -281,36 +275,6 @@ export default defineSchema({
     userId: v.id("users"), // FK to users
     role: v.string(),
     teamId: v.optional(v.id("teams")), // FK to teams
-  }),
-
-  // FK: userId -> users._id, activeOrganizationId -> organizations._id, impersonatedBy -> users._id
-  sessions: defineTable({
-    expiresAt: v.number(),
-    token: v.string(),
-    ipAddress: v.optional(v.string()),
-    userAgent: v.optional(v.string()),
-    userId: v.id("users"), // FK to users
-    activeOrganizationId: v.optional(v.id("organizations")), // FK to organizations
-    impersonatedBy: v.optional(v.id("users")), // FK to users
-  }).index("by_token", ["token"]),
-
-  userAccounts: defineTable({
-    accountId: v.string(),
-    providerId: v.string(),
-    userId: v.id("users"),
-    accessToken: v.optional(v.string()),
-    refreshToken: v.optional(v.string()),
-    idToken: v.optional(v.string()),
-    accessTokenExpiresAt: v.optional(v.number()),
-    refreshTokenExpiresAt: v.optional(v.number()),
-    scope: v.optional(v.string()),
-    password: v.optional(v.string()),
-  }),
-
-  verifications: defineTable({
-    identifier: v.string(),
-    value: v.string(),
-    expiresAt: v.number(),
   }),
 
   // Bank Accounts Schema
@@ -406,7 +370,7 @@ export default defineSchema({
     discountedInterestRate: v.optional(v.number()),
     accountType: fdAccountTypeEnum,
     organizationId: v.id("organizations"), // FK to organizations
-  }).index("by_receipt_org", ["receiptNo", "organizationId"]),
+  }).index("by_receipt_and_organization", ["receiptNo", "organizationId"]),
 
   // FK: subAccountsId -> subAccounts._id, transactionHeadId -> transactionHead._id, organizationId -> organizations._id
   // NOTE: intDate uses the organization's run date
@@ -522,7 +486,7 @@ export default defineSchema({
     mobile: v.optional(v.string()),
     status: memberStatusEnum,
     organizationId: v.id("organizations"), // FK to organizations
-  }).index("by_member_org", ["memberNo", "organizationId"]),
+  }).index("by_memberNo_and_organization", ["memberNo", "organizationId"]),
 
   // FK: organizationId -> organizations._id
   memberAddress: defineTable({
@@ -590,7 +554,7 @@ export default defineSchema({
     status: accountStatusEnum,
     balance: v.optional(v.number()),
     organizationId: v.id("organizations"), // FK to organizations
-  }).index("by_sub_account_org", ["subAccountNo", "organizationId"]),
+  }).index("by_subAccountNo_and_organization", ["subAccountNo", "organizationId"]),
 
   // Uncategorized Schema
   // FK: organizationId -> organizations._id
@@ -602,7 +566,7 @@ export default defineSchema({
     locked: v.optional(v.boolean()),
     isActive: v.optional(v.boolean()),
     organizationId: v.id("organizations"), // FK to organizations
-  }).index("by_active_org", ["organizationId", "isActive"]),
+  }).index("by_organization_and_isActive", ["organizationId", "isActive"]),
 
   // FK: financialYearsId -> financialYears._id
   // NOTE: This table controls the current operational date per organization
@@ -613,7 +577,7 @@ export default defineSchema({
     dayEnd: v.boolean(),
     currentDay: v.boolean(),
     description: v.optional(v.string()),
-  }).index("by_current_day_fy", ["financialYearsId", "currentDay"]),
+  }).index("by_financialYearsId_and_currentDay", ["financialYearsId", "currentDay"]),
 
   // FK: subAccountsId -> subAccounts._id, organizationId -> organizations._id
   // NOTE: nominationDate uses the organization's run date
